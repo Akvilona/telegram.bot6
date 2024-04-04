@@ -42,8 +42,8 @@ public class MyTelegramBot extends TelegramLongPollingBot {
     @Override
     public void onUpdateReceived(Update update) { // все сообщения из телеграм бота
         log.info("ПРИШЛО СООБЩЕНИЕ!");
-        log.info(update.getMessage().getFrom().getFirstName());
-        log.info(update.getMessage().getText());
+//        log.info(update.getMessage().getFrom().getFirstName());
+//        log.info(update.getMessage().getText());
 
         try {
 //            if (update.hasCallbackQuery()) {
