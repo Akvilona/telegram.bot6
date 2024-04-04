@@ -1,15 +1,14 @@
-/**
- * Создал Андрей Антонов 4/3/2024 10:50 AM.
- **/
-
 package ru.antonov.telegram.bot.service;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.telegram.telegrambots.meta.api.objects.Message;
+import org.telegram.telegrambots.meta.api.objects.Update;
 import ru.antonov.telegram.bot.exceptions.ErrorCode;
 import ru.antonov.telegram.bot.exceptions.ServiceException;
 import ru.antonov.telegram.bot.model.entity.UserData;
+import ru.antonov.telegram.bot.util.DateUtil;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -24,22 +23,39 @@ public class UserDataService {
 
     private static UserData getDefaultUserData(final Long chatId) {
         return UserData.builder()
-                .id(chatId)
-                .searchEventDate(LocalDate.now())
-                .currentEventPage(1)
-                .totalEventPages(1)
-                .build();
+            .id(chatId)
+            .searchEventDate(LocalDate.now())
+            .currentEventPage(1)
+            .totalEventPages(1)
+            .build();
     }
 
-    public List<Integer> getAllMessageIdsForDelete(final UserData userData) {
-        return Stream.of(
-                        Optional.ofNullable(userData.getLastUserMessageId()).stream(),
-                        Optional.ofNullable(userData.getLastBotMessageId()).stream(),
-                        userData.getMediaMessageIdList().stream()
-                )
-                .flatMap(i -> i)
-                .filter(Objects::nonNull)
-                .toList();
+    /**
+     * Updates the calendar store with the selected date or the changed calendar month.
+     *
+     * @param update         - the update event from Telegram
+     * @param isMonthChanged - a flag indicating whether the calendar month has changed
+     * @return the updated local date
+     */
+    @Transactional
+    public UserData updateCalendarDate(final Update update, final boolean isMonthChanged) {
+        final Long chatId = update.getMessage().getChatId();
+        final String text = update.getMessage().getText();
+
+        final UserData userData = getUserData(chatId);
+
+        final LocalDate localDate = isMonthChanged
+                                    ? DateUtil.convertToDateTimeCalendarMonthChanged(text, userData.getSearchEventDate())
+                                    : DateUtil.parseSelectedDate(text, userData.getSearchEventDate());
+
+        userData.setSearchEventDate(localDate);
+
+        return userData;
+    }
+
+    public UserData getUserData(final Long chatId) {
+        return userDataRepository.findById(chatId)
+            .orElseThrow(() -> new ServiceException(ErrorCode.ERR_CODE_001));
     }
 
     @Transactional
@@ -55,14 +71,80 @@ public class UserDataService {
         return userDataRepository.save(getDefaultUserData(chatId));
     }
 
+    public UserData incrementCurrentPage(final Long chatId) {
+        final UserData userData = getUserData(chatId);
+        userData.setCurrentEventPage(userData.getCurrentEventPage() + 1);
+        return userData;
+    }
+
+    public UserData decrementCurrentPage(final Long chatId) {
+        final UserData userData = userDataRepository.findById(chatId)
+            .orElseThrow(() -> new ServiceException(ErrorCode.ERR_CODE_001));
+        userData.setCurrentEventPage(userData.getCurrentEventPage() - 1);
+        return userData;
+    }
+
+    @Transactional
+    public UserData addMonthAndGetUserData(final Long chatId) {
+        final UserData userData = userDataRepository.findById(chatId)
+            .orElseThrow(() -> new ServiceException(ErrorCode.ERR_CODE_001));
+        userData.setSearchEventDate(userData.getSearchEventDate().plusMonths(1));
+        return userData;
+    }
+
+    @Transactional
+    public UserData substractMonthAndGetUserData(final Long chatId) {
+        final UserData userData = userDataRepository.findById(chatId)
+            .orElseThrow(() -> new ServiceException(ErrorCode.ERR_CODE_001));
+        userData.setSearchEventDate(userData.getSearchEventDate().minusMonths(1));
+        return userData;
+    }
+
+    @Transactional
+    public UserData updateCurrentPage(final Long chatId, final int page) {
+        final UserData userData = getUserData(chatId);
+        userData.setCurrentEventPage(page);
+        return userData;
+    }
+
+    @Transactional
+    public void updatePageInfo(final Long chatId, final int pageMax, final int currentPage) {
+        final UserData userData = getUserData(chatId);
+        userData.setCurrentEventPage(currentPage);
+        userData.setTotalEventPages(pageMax);
+    }
+
+    @Transactional
+    public void updateMediaIdList(final List<Message> mediaIds, final Long chatId) {
+        final List<Integer> idList = mediaIds.stream()
+            .map(Message::getMessageId)
+            .toList();
+
+        final UserData userData = getUserData(chatId);
+        userData.setMediaMessageIdList(idList);
+    }
+
+    @Transactional
+    public void updateLastBotMessageId(final Integer messageId, final Long chatId) {
+        final UserData userData = getUserData(chatId);
+        userData.setLastBotMessageId(messageId);
+    }
+
     @Transactional
     public void saveUserMessageId(final Integer messageId, final Long chatId) {
         final UserData userData = getUserData(chatId);
         userData.setLastUserMessageId(messageId);
     }
 
-    public UserData getUserData(final Long chatId) {
-        return userDataRepository.findById(chatId)
-                .orElseThrow(() -> new ServiceException(ErrorCode.ERR_CODE_001));
+    public List<Integer> getAllMessageIdsForDelete(final UserData userData) {
+        return Stream.of(
+                Optional.ofNullable(userData.getLastUserMessageId()).stream(),
+                Optional.ofNullable(userData.getLastBotMessageId()).stream(),
+                userData.getMediaMessageIdList().stream()
+            )
+            .flatMap(i -> i)
+            .filter(Objects::nonNull)
+            .toList();
     }
+
 }

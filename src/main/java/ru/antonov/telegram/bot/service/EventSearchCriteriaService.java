@@ -1,12 +1,10 @@
-/**
- * Создал Андрей Антонов 4/3/2024 3:52 PM.
- **/
-
 package ru.antonov.telegram.bot.service;
 
 import lombok.RequiredArgsConstructor;
-import org.jvnet.hk2.annotations.Service;
+import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import ru.antonov.telegram.bot.exceptions.ErrorCode;
+import ru.antonov.telegram.bot.exceptions.ServiceException;
 import ru.antonov.telegram.bot.model.entity.EventSearchCriteria;
 import ru.antonov.telegram.bot.repository.EventSearchCriteriaRepository;
 
@@ -19,6 +17,23 @@ public class EventSearchCriteriaService {
     private final EventSearchCriteriaRepository eventSearchCriteriaRepository;
 
     @Transactional
+    public void updateSearchCriteria(final Long chatId,
+                                     final String searchCriteria) {
+        final EventSearchCriteria eventSearchCriteria = eventSearchCriteriaRepository.findByChatId(chatId)
+            .orElseThrow(() -> new ServiceException(ErrorCode.ERR_CODE_999));
+        eventSearchCriteria.setDate(searchCriteria);
+    }
+
+    @Transactional
+    public EventSearchCriteria toggleLocationName(final Long chatId,
+                                                  final String locationName) {
+        final EventSearchCriteria eventSearchCriteria = eventSearchCriteriaRepository.findByChatId(chatId)
+            .orElseThrow(() -> new ServiceException(ErrorCode.ERR_CODE_999));
+        eventSearchCriteria.toggleLocationName(locationName);
+        return eventSearchCriteria;
+    }
+
+    @Transactional
     public EventSearchCriteria saveOrUpdateEventSearchCriteria(final Long chatId) {
         final Optional<EventSearchCriteria> userDataOptional = eventSearchCriteriaRepository.findByChatId(chatId);
         if (userDataOptional.isPresent()) {
@@ -28,8 +43,7 @@ public class EventSearchCriteriaService {
             return userData;
         }
         return eventSearchCriteriaRepository.save(EventSearchCriteria.builder()
-                .chatId(chatId)
-                .build());
+            .chatId(chatId)
+            .build());
     }
-
 }
